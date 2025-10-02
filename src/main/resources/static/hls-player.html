@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLS Stream Player</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        input[type="text"] {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .stop-btn {
+            background-color: #dc3545;
+        }
+        .stop-btn:hover {
+            background-color: #c82333;
+        }
+        #videoContainer {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 20px auto;
+        }
+        video {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .stream-info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border-left: 4px solid #007bff;
+        }
+        .stream-info h3 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        .stream-info p {
+            margin: 5px 0;
+            font-family: monospace;
+            background-color: #e9ecef;
+            padding: 5px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 HLS Stream Player</h1>
+        
+        <div class="controls">
+            <input type="text" id="streamName" placeholder="Enter stream name (e.g., myStream)" value="myStream">
+            <button id="startStreamBtn" onclick="startHLSStream()">Start HLS Stream</button>
+            <button id="stopStreamBtn" onclick="stopHLSStream()" class="stop-btn" disabled>Stop Stream</button>
+            <button onclick="loadStream()">Load Stream</button>
+            <button onclick="checkStreamStatus()">Check Status</button>
+        </div>
+
+        <div id="videoContainer">
+            <video id="video" controls muted autoplay>
+                Your browser does not support the video tag.
+            </video>
+        </div>
+
+        <div id="status"></div>
+        <div id="streamInfo" class="stream-info" style="display: none;">
+            <h3>Stream Information</h3>
+            <p><strong>HLS URL:</strong> <span id="hlsUrl"></span></p>
+            <p><strong>M3U8 File:</strong> <span id="m3u8Url"></span></p>
+        </div>
+    </div>
+
+    <script>
+        let hls = null;
+        let currentStreamName = null;
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function showStreamInfo(hlsUrl, m3u8Url) {
+            document.getElementById('hlsUrl').textContent = hlsUrl;
+            document.getElementById('m3u8Url').textContent = m3u8Url;
+            document.getElementById('streamInfo').style.display = 'block';
+        }
+
+        function hideStreamInfo() {
+            document.getElementById('streamInfo').style.display = 'none';
+        }
+
+        async function startHLSStream() {
+            const streamName = document.getElementById('streamName').value.trim();
+            if (!streamName) {
+                showStatus('Please enter a stream name', 'error');
+                return;
+            }
+
+            try {
+                showStatus('Starting HLS stream...', 'info');
+                
+                const response = await fetch(`/api/stream/hls/start?streamName=${encodeURIComponent(streamName)}&rtspPort=8554`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const hlsUrl = await response.text();
+                    currentStreamName = streamName;
+                    
+                    showStatus('HLS stream started successfully!', 'success');
+                    showStreamInfo(hlsUrl, hlsUrl);
+                    
+                    // Enable stop button
+                    document.getElementById('stopStreamBtn').disabled = false;
+                    document.getElementById('startStreamBtn').disabled = true;
+                    
+                    // Wait a moment for the stream to be ready, then check status and load it
+                    setTimeout(() => {
+                        checkStreamStatusAndLoad(streamName, hlsUrl);
+                    }, 3000);
+                } else {
+                    const errorText = await response.text();
+                    showStatus(`Failed to start stream: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function stopHLSStream() {
+            if (!currentStreamName) return;
+
+            try {
+                showStatus('Stopping HLS stream...', 'info');
+                
+                const response = await fetch(`/api/stream/hls/stop?streamName=${encodeURIComponent(currentStreamName)}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    showStatus('HLS stream stopped successfully!', 'success');
+                    hideStreamInfo();
+                    
+                    // Disable stop button and enable start button
+                    document.getElementById('stopStreamBtn').disabled = true;
+                    document.getElementById('startStreamBtn').disabled = false;
+                    
+                    // Stop video playback
+                    if (hls) {
+                        hls.destroy();
+                        hls = null;
+                    }
+                    document.getElementById('video').src = '';
+                    currentStreamName = null;
+                } else {
+                    showStatus('Failed to stop stream', 'error');
+                }
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkStreamStatusAndLoad(streamName, hlsUrl) {
+            try {
+                showStatus('Checking stream status...', 'info');
+                const response = await fetch(`/api/stream/hls/${streamName}/status`);
+                const status = await response.text();
+                showStatus('Stream status: ' + status, 'info');
+                
+                if (status.includes('Stream active')) {
+                    loadHLSStream(hlsUrl);
+                } else {
+                    showStatus('Stream not ready yet. Please wait and try again.', 'error');
+                }
+            } catch (error) {
+                showStatus('Error checking stream status: ' + error.message, 'error');
+            }
+        }
+
+        async function checkStreamStatus() {
+            const streamName = document.getElementById('streamName').value.trim();
+            if (!streamName) {
+                showStatus('Please enter a stream name', 'error');
+                return;
+            }
+
+            try {
+                showStatus('Checking stream status...', 'info');
+                const response = await fetch(`/api/stream/hls/${streamName}/status`);
+                const status = await response.text();
+                showStatus('Stream status: ' + status, 'info');
+            } catch (error) {
+                showStatus('Error checking stream status: ' + error.message, 'error');
+            }
+        }
+
+        function loadStream() {
+            const streamName = document.getElementById('streamName').value.trim();
+            if (!streamName) {
+                showStatus('Please enter a stream name', 'error');
+                return;
+            }
+
+            const hlsUrl = `http://localhost:8080/api/stream/hls/${streamName}/stream.m3u8`;
+            checkStreamStatusAndLoad(streamName, hlsUrl);
+        }
+
+        function loadHLSStream(url) {
+            const video = document.getElementById('video');
+            console.log('Loading HLS stream from URL:', url);
+            showStatus('Loading HLS stream from: ' + url, 'info');
+            
+            if (hls) {
+                hls.destroy();
+            }
+
+            if (Hls.isSupported()) {
+                hls = new Hls({
+                    debug: false,
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    backBufferLength: 90
+                });
+                
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    showStatus('HLS stream loaded successfully!', 'success');
+                    video.play().catch(e => {
+                        showStatus('Auto-play blocked. Click play to start video.', 'info');
+                    });
+                });
+                
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    console.error('HLS Error:', data);
+                    if (data.fatal) {
+                        switch(data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                showStatus('Network error occurred while loading HLS stream', 'error');
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                showStatus('Media error occurred while loading HLS stream', 'error');
+                                break;
+                            default:
+                                showStatus('Fatal error occurred while loading HLS stream', 'error');
+                                break;
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Native HLS support (Safari)
+                video.src = url;
+                video.addEventListener('loadedmetadata', function() {
+                    showStatus('HLS stream loaded successfully!', 'success');
+                });
+            } else {
+                showStatus('HLS is not supported in this browser', 'error');
+            }
+        }
+
+        // Auto-load stream on page load if there's a default stream
+        window.addEventListener('load', function() {
+            // You can uncomment this to auto-load a stream on page load
+            // loadStream();
+        });
+    </script>
+</body>
+</html>

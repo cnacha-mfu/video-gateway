@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.iml
+*.ipr
+*.iws
+
+# Build artifacts
+target/
+bin/target/
+*.jar
+*.war
+*.ear
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Documentation
+README.md
+*.md
+
+# Scripts
+*.bat
+*.sh
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Maven wrapper (optional - uncomment if you don't use it)
+# .mvn/
+# mvnw
+# mvnw.cmd
