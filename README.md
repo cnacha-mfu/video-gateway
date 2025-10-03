@@ -84,6 +84,14 @@ You should see:
 
 ## 🎬 Using the Video Gateway
 
+### **📋 Important: Streaming Workflow**
+
+The video gateway follows this workflow:
+1. **Video File** → **RTSP Stream** → **HLS Stream** → **Web Player**
+2. **RTSP must be started first** to create the source stream
+3. **HLS converts** the RTSP stream for web playback
+4. **Web player** displays the HLS stream
+
 ### **Method 1: Web Player (Recommended)**
 
 1. **Open your browser** and navigate to:
@@ -93,27 +101,35 @@ You should see:
 
 2. **Enter a stream name** (e.g., "myStream", "test", "live")
 
-3. **Click "Start HLS Stream"**
+3. **Start RTSP Stream First** (Important!):
+   - Click "Start RTSP Stream" button
+   - Wait for confirmation that RTSP stream is active
+   - This creates the RTSP source that HLS will convert from
 
-4. **Wait for confirmation** - you'll see "HLS stream started successfully!"
+4. **Start HLS Stream**:
+   - Click "Start HLS Stream"
+   - Wait for confirmation - you'll see "HLS stream started successfully!"
 
 5. **The player will automatically load** the stream after 3 seconds
 
 ### **Method 2: VLC Player**
 
-1. **Start the HLS stream** using the web player first
+1. **Start RTSP Stream First**:
+   -  use API: `curl -X POST "http://localhost:8080/api/stream/rtsp/start?streamName=myStream"`
 
-2. **Open VLC Player**
+2. **Start the HLS stream** using the web player
 
-3. **Go to**: Media → Open Network Stream (Ctrl+N)
+3. **Open VLC Player**
 
-4. **Enter the HLS URL**:
+4. **Go to**: Media → Open Network Stream (Ctrl+N)
+
+5. **Enter the HLS URL**:
    ```
    http://localhost:8080/api/stream/hls/myStream/stream.m3u8
    ```
    (Replace "myStream" with your actual stream name)
 
-5. **Click Play**
+6. **Click Play**
 
 ### **Method 3: Direct API Access**
 
@@ -210,9 +226,16 @@ curl -X POST "http://localhost:8080/api/stream/hls/stop?streamName=myStream"
 - ✅ Check Docker logs: `docker-compose logs -f`
 
 #### **"Stream not loading in browser"**
-- ✅ Wait 3-5 seconds after starting stream
+- ✅ **Start RTSP stream first** before HLS stream
+- ✅ Wait 3-5 seconds after starting each stream
 - ✅ Check browser console for errors
 - ✅ Verify stream is active: `check-status.bat`
+
+#### **"HLS stream fails to start"**
+- ✅ **Ensure RTSP stream is running first**
+- ✅ Check RTSP stream status in web player
+- ✅ Verify video file exists: `dir C:\tmp\videoplayback.mp4`
+- ✅ Check Docker logs: `docker-compose logs -f video-gateway`
 
 #### **"VLC cannot play stream"**
 - ✅ Start stream in web player first
@@ -359,8 +382,9 @@ If you encounter any issues:
 2. **Copy your MP4 file** to `C:\tmp\videoplayback.mp4`
 3. **Run**: `run-compose.bat`
 4. **Open**: `http://localhost:8080`
-5. **Enter stream name** and click "Start HLS Stream"
-6. **Enjoy continuous streaming!**
+5. **Enter stream name** and click "Start RTSP Stream"
+6. **Wait for RTSP confirmation**, then click "Start HLS Stream"
+7. **Enjoy continuous streaming!**
 
 ---
 
