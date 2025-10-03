@@ -143,6 +143,11 @@
     <script>
         let hls = null;
         let currentStreamName = null;
+        let reconnectAttempts = 0;
+        let maxReconnectAttempts = 10;
+        let reconnectInterval = null;
+        let streamMonitorInterval = null;
+        let isStreaming = false;
 
         function showStatus(message, type = 'info') {
             const statusDiv = document.getElementById('status');
@@ -204,6 +209,9 @@
             try {
                 showStatus('Stopping HLS stream...', 'info');
                 
+                // Stop continuous streaming
+                cleanup();
+                
                 const response = await fetch(`/api/stream/hls/stop?streamName=${encodeURIComponent(currentStreamName)}`, {
                     method: 'POST'
                 });
@@ -217,12 +225,9 @@
                     document.getElementById('startStreamBtn').disabled = false;
                     
                     // Stop video playback
-                    if (hls) {
-                        hls.destroy();
-                        hls = null;
-                    }
                     document.getElementById('video').src = '';
                     currentStreamName = null;
+                    reconnectAttempts = 0;
                 } else {
                     showStatus('Failed to stop stream', 'error');
                 }
@@ -290,14 +295,24 @@
                     debug: false,
                     enableWorker: true,
                     lowLatencyMode: true,
-                    backBufferLength: 90
+                    backBufferLength: 90,
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 60,
+                    liveSyncDurationCount: 3,
+                    liveMaxLatencyDurationCount: 5,
+                    maxLiveSyncPlaybackRate: 1.2,
+                    liveDurationInfinity: true,
+                    highBufferWatchdogPeriod: 2
                 });
                 
                 hls.loadSource(url);
                 hls.attachMedia(video);
                 
                 hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                    showStatus('HLS stream loaded successfully!', 'success');
+                    showStatus('HLS stream loaded successfully! Continuous streaming enabled.', 'success');
+                    isStreaming = true;
+                    reconnectAttempts = 0;
+                    startStreamMonitoring();
                     video.play().catch(e => {
                         showStatus('Auto-play blocked. Click play to start video.', 'info');
                     });
@@ -306,34 +321,180 @@
                 hls.on(Hls.Events.ERROR, function(event, data) {
                     console.error('HLS Error:', data);
                     if (data.fatal) {
+                        isStreaming = false;
                         switch(data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
-                                showStatus('Network error occurred while loading HLS stream', 'error');
+                                showStatus(`Network error occurred. Attempting to reconnect... (${reconnectAttempts + 1}/${maxReconnectAttempts})`, 'error');
+                                attemptReconnect(url);
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
-                                showStatus('Media error occurred while loading HLS stream', 'error');
+                                showStatus(`Media error occurred. Attempting to recover... (${reconnectAttempts + 1}/${maxReconnectAttempts})`, 'error');
+                                attemptReconnect(url);
                                 break;
                             default:
-                                showStatus('Fatal error occurred while loading HLS stream', 'error');
+                                showStatus(`Fatal error occurred. Attempting to reconnect... (${reconnectAttempts + 1}/${maxReconnectAttempts})`, 'error');
+                                attemptReconnect(url);
                                 break;
+                        }
+                    } else {
+                        // Non-fatal error, try to recover
+                        console.log('Non-fatal HLS error, attempting recovery:', data);
+                        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                            hls.recoverMediaError();
                         }
                     }
                 });
+
+                // Monitor for stream health
+                hls.on(Hls.Events.FRAG_LOADED, function() {
+                    reconnectAttempts = 0; // Reset on successful fragment load
+                });
+
+                hls.on(Hls.Events.FRAG_LOAD_ERROR, function(event, data) {
+                    console.warn('Fragment load error:', data);
+                    if (data.fatal) {
+                        attemptReconnect(url);
+                    }
+                });
+
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 // Native HLS support (Safari)
                 video.src = url;
                 video.addEventListener('loadedmetadata', function() {
-                    showStatus('HLS stream loaded successfully!', 'success');
+                    showStatus('HLS stream loaded successfully! Continuous streaming enabled.', 'success');
+                    isStreaming = true;
+                    reconnectAttempts = 0;
+                    startStreamMonitoring();
+                });
+                
+                video.addEventListener('error', function() {
+                    showStatus('Video error occurred. Attempting to reconnect...', 'error');
+                    attemptReconnect(url);
                 });
             } else {
                 showStatus('HLS is not supported in this browser', 'error');
             }
         }
 
+        function attemptReconnect(url) {
+            if (reconnectAttempts >= maxReconnectAttempts) {
+                showStatus(`Maximum reconnection attempts (${maxReconnectAttempts}) reached. Please restart the stream manually.`, 'error');
+                return;
+            }
+
+            reconnectAttempts++;
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 10000); // Exponential backoff, max 10 seconds
+            
+            showStatus(`Reconnecting in ${delay/1000} seconds... (Attempt ${reconnectAttempts}/${maxReconnectAttempts})`, 'info');
+            
+            setTimeout(() => {
+                if (isStreaming || reconnectAttempts < maxReconnectAttempts) {
+                    showStatus('Attempting to reconnect...', 'info');
+                    loadHLSStream(url);
+                }
+            }, delay);
+        }
+
+        function startStreamMonitoring() {
+            if (streamMonitorInterval) {
+                clearInterval(streamMonitorInterval);
+            }
+
+            streamMonitorInterval = setInterval(() => {
+                if (isStreaming && currentStreamName) {
+                    checkStreamHealth();
+                }
+            }, 5000); // Check every 5 seconds
+        }
+
+        function stopStreamMonitoring() {
+            if (streamMonitorInterval) {
+                clearInterval(streamMonitorInterval);
+                streamMonitorInterval = null;
+            }
+        }
+
+        async function checkStreamHealth() {
+            if (!currentStreamName) return;
+
+            try {
+                const response = await fetch(`/api/stream/hls/${currentStreamName}/status`);
+                if (!response.ok) {
+                    throw new Error('Stream health check failed');
+                }
+                const status = await response.text();
+                
+                if (!status.includes('Stream active')) {
+                    showStatus('Stream appears to be inactive. Attempting to restart...', 'error');
+                    await restartStream();
+                }
+            } catch (error) {
+                console.warn('Stream health check failed:', error);
+                showStatus('Stream health check failed. Attempting to restart...', 'error');
+                await restartStream();
+            }
+        }
+
+        async function restartStream() {
+            if (!currentStreamName) return;
+
+            try {
+                showStatus('Restarting stream...', 'info');
+                
+                // Stop current stream
+                if (hls) {
+                    hls.destroy();
+                    hls = null;
+                }
+                isStreaming = false;
+                stopStreamMonitoring();
+
+                // Wait a moment
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Restart stream
+                const response = await fetch(`/api/stream/hls/start?streamName=${encodeURIComponent(currentStreamName)}&rtspPort=8554`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const hlsUrl = await response.text();
+                    showStatus('Stream restarted successfully!', 'success');
+                    
+                    // Wait for stream to be ready
+                    setTimeout(() => {
+                        loadHLSStream(hlsUrl);
+                    }, 3000);
+                } else {
+                    throw new Error('Failed to restart stream');
+                }
+            } catch (error) {
+                showStatus(`Failed to restart stream: ${error.message}`, 'error');
+            }
+        }
+
+        function cleanup() {
+            stopStreamMonitoring();
+            if (reconnectInterval) {
+                clearInterval(reconnectInterval);
+                reconnectInterval = null;
+            }
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+            isStreaming = false;
+        }
+
         // Auto-load stream on page load if there's a default stream
         window.addEventListener('load', function() {
             // You can uncomment this to auto-load a stream on page load
             // loadStream();
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            cleanup();
         });
     </script>
 </body>

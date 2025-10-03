@@ -23,8 +23,8 @@ public class StreamController {
     public ResponseEntity<String> startRTSPStream(
             @RequestParam(defaultValue = "8554") int port,
             @RequestParam String streamName) {
-        //String inputUrl = "/tmp/videoplayback.mp4"; 
-        String inputUrl = "C:/tmp/videoplayback.mp4"; 
+        String inputUrl = "/tmp/videoplayback.mp4"; 
+        //String inputUrl = "C:/tmp/videoplayback.mp4"; 
         String rtspUrl = rtspStreamService.startStream(inputUrl, port, streamName);
         return ResponseEntity.ok(rtspUrl);
     }
@@ -37,13 +37,61 @@ public class StreamController {
 
     @PostMapping("/hls/start")
     public ResponseEntity<String> startHLSStream(
-            @RequestParam(defaultValue = "8554") int rtspPort,
-            @RequestParam String streamName) {
-        // First get RTSP URL
-        String rtspUrl = "rtsp://localhost:" + rtspPort + "/" + streamName;
-        // Convert RTSP to HLS
-        String hlsUrl = hlsStreamService.startHLSStream(rtspUrl, streamName);
-        return ResponseEntity.ok(hlsUrl);
+            @RequestParam(required = false, defaultValue = "8554") int rtspPort,
+            @RequestParam(required = false) String streamName,
+            @RequestBody(required = false) StreamRequest request) {
+        
+        String finalStreamName;
+        String rtspUrl;
+        
+        // Handle JSON request body
+        if (request != null) {
+            finalStreamName = request.getStreamName();
+            if (finalStreamName == null || finalStreamName.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body("Stream name is required");
+            }
+            
+            // Check if custom RTSP URL is provided
+            if (request.getRtspUrl() != null && !request.getRtspUrl().trim().isEmpty()) {
+                rtspUrl = request.getRtspUrl();
+                System.out.println("Using custom RTSP URL: " + rtspUrl);
+            } else {
+                // Use default RTSP URL construction
+                String mediamtxHost = System.getenv("MEDIAMTX_HOST");
+                if (mediamtxHost == null) {
+                    mediamtxHost = "localhost"; // fallback for local development
+                }
+                int port = (request.getRtspPort() != null) ? request.getRtspPort() : rtspPort;
+                rtspUrl = "rtsp://" + mediamtxHost + ":" + port + "/" + finalStreamName;
+                System.out.println("Using MediaMTX host: " + mediamtxHost);
+                System.out.println("RTSP URL: " + rtspUrl);
+            }
+        } else {
+            // Handle query parameters (backward compatibility)
+            if (streamName == null || streamName.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body("Stream name is required");
+            }
+            finalStreamName = streamName;
+            
+            // Use default RTSP URL construction
+            String mediamtxHost = System.getenv("MEDIAMTX_HOST");
+            if (mediamtxHost == null) {
+                mediamtxHost = "localhost"; // fallback for local development
+            }
+            rtspUrl = "rtsp://" + mediamtxHost + ":" + rtspPort + "/" + finalStreamName;
+            System.out.println("Using MediaMTX host: " + mediamtxHost);
+            System.out.println("RTSP URL: " + rtspUrl);
+        }
+        
+        try {
+            // Convert RTSP to HLS
+            String hlsUrl = hlsStreamService.startHLSStream(rtspUrl, finalStreamName);
+            return ResponseEntity.ok(hlsUrl);
+        } catch (Exception e) {
+            System.err.println("Error starting HLS stream: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Failed to start HLS stream: " + e.getMessage());
+        }
     }
 
     @PostMapping("/hls/stop")
@@ -55,7 +103,7 @@ public class StreamController {
     // Serve HLS playlist and segments
     @GetMapping("/hls/{streamName}/stream.m3u8")
     public ResponseEntity<Resource> getHLSPlaylist(@PathVariable String streamName) {
-        File playlistFile = new File("C:/tmp/hls/" + streamName + "/stream.m3u8");
+        File playlistFile = new File("/tmp/hls/" + streamName + "/stream.m3u8");
         if (!playlistFile.exists()) {
             return ResponseEntity.notFound().build();
         }
@@ -69,7 +117,7 @@ public class StreamController {
 
     @GetMapping("/hls/{streamName}/{segment}")
     public ResponseEntity<Resource> getHLSSegment(@PathVariable String streamName, @PathVariable String segment) {
-        File segmentFile = new File("C:/tmp/hls/" + streamName + "/" + segment);
+        File segmentFile = new File("/tmp/hls/" + streamName + "/" + segment);
         if (!segmentFile.exists()) {
             return ResponseEntity.notFound().build();
         }
@@ -86,8 +134,8 @@ public class StreamController {
     // Check HLS stream status
     @GetMapping("/hls/{streamName}/status")
     public ResponseEntity<String> getHLSStreamStatus(@PathVariable String streamName) {
-        File playlistFile = new File("C:/tmp/hls/" + streamName + "/stream.m3u8");
-        File streamDir = new File("C:/tmp/hls/" + streamName);
+        File playlistFile = new File("/tmp/hls/" + streamName + "/stream.m3u8");
+        File streamDir = new File("/tmp/hls/" + streamName);
         
         if (!streamDir.exists()) {
             return ResponseEntity.ok("Stream directory does not exist");

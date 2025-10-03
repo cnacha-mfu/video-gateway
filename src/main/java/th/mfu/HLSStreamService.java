@@ -24,7 +24,7 @@ public class HLSStreamService {
             logger.info("Sample rate: " + grabber.getSampleRate());
 
             // make sure directory exists
-            File outputDir = new File("C:/tmp/hls/" + streamName);
+            File outputDir = new File("/tmp/hls/" + streamName);
             if (!outputDir.exists()) {
                 boolean created = outputDir.mkdirs();
                 logger.info("Created output directory: " + outputDir.getAbsolutePath() + " - Success: " + created);
@@ -113,7 +113,7 @@ public class HLSStreamService {
 
     public void stopHLSStream(String streamName) {
         // Clean up HLS segments
-        File hlsDir = new File("C:/tmp/hls/" + streamName);
+        File hlsDir = new File("/tmp/hls/" + streamName);
         if (hlsDir.exists()) {
             File[] files = hlsDir.listFiles();
             if (files != null) {

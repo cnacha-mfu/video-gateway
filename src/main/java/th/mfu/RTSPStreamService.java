@@ -27,8 +27,14 @@ public class RTSPStreamService {
             FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(inputUrl);
             grabber.start();
 
-            // Use localhost instead of 0.0.0.0 for RTSP client connection
-            String outputUrl = "rtsp://localhost:" + port + "/" + streamName;
+            // Use MediaMTX service name for Docker Compose network
+            String mediamtxHost = System.getenv("MEDIAMTX_HOST");
+            if (mediamtxHost == null) {
+                mediamtxHost = "localhost"; // fallback for local development
+            }
+            String outputUrl = "rtsp://" + mediamtxHost + ":" + port + "/" + streamName;
+            System.out.println("RTSPStreamService - Using MediaMTX host: " + mediamtxHost);
+            System.out.println("RTSPStreamService - Output URL: " + outputUrl);
             FFmpegFrameRecorder recorder = new FFmpegFrameRecorder(outputUrl,
                     grabber.getImageWidth(),
                     grabber.getImageHeight(),
