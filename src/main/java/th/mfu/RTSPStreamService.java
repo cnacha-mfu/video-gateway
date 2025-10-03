@@ -41,17 +41,20 @@ public class RTSPStreamService {
                     grabber.getAudioChannels()
                     );
             
-            // Configure grabber for low latency
-            grabber.setOption("fflags", "nobuffer");  // reduce internal buffering
+            // Configure grabber for ultra-low latency
+            grabber.setOption("fflags", "nobuffer+fastseek+genpts");  // reduce internal buffering
             grabber.setOption("flags", "low_delay");
             grabber.setOption("framedrop", "false");
+            grabber.setOption("analyzeduration", "1000000");  // 1 second analysis
+            grabber.setOption("probesize", "1000000");        // 1MB probe size
+            grabber.setOption("sync", "ext");                 // External sync
             
-            // Configure recorder for RTSP client
+            // Configure recorder for RTSP client with optimized settings
             recorder.setFormat("rtsp");
             recorder.setOption("rtsp_transport", "tcp");
-            
-            // Set global header flag for proper codec support
-            // recorder.getFormatContext().flags(avformat.AVFMT_GLOBALHEADER);
+            recorder.setOption("rtsp_flags", "prefer_tcp");
+            recorder.setOption("muxdelay", "0.1");            // Minimal mux delay
+            recorder.setOption("muxpreload", "0.1");          // Minimal mux preload
             
             // --- Video Configuration ---
             recorder.setVideoCodec(avcodec.AV_CODEC_ID_H264);
@@ -60,13 +63,20 @@ public class RTSPStreamService {
             recorder.setGopSize((int) grabber.getFrameRate()); // 1s keyframe
             recorder.setVideoOption("preset", "ultrafast");
             recorder.setVideoOption("tune", "zerolatency");
-            // recorder.setVideoOption("profile", "baseline"); // Use baseline profile for better compatibility
+            // Note: Removed profile setting as it's not compatible with OpenH264
+            recorder.setVideoOption("crf", "23");             // Constant rate factor
+            recorder.setVideoOption("maxrate", "2M");         // Max bitrate
+            recorder.setVideoOption("bufsize", "4M");         // Buffer size
+            recorder.setVideoOption("keyint_min", "30");      // Minimum keyframe interval
+            recorder.setVideoOption("sc_threshold", "0");     // Disable scene change detection
 
             // --- Audio Configuration ---
             recorder.setAudioCodec(avcodec.AV_CODEC_ID_AAC);
             recorder.setAudioBitrate(128_000);
             recorder.setSampleRate(grabber.getSampleRate());
-            recorder.setAudioOption("aac_coder", "fast"); // Use fast AAC encoder
+            recorder.setAudioOption("aac_coder", "fast");     // Use fast AAC encoder
+            recorder.setAudioOption("aac_latm", "0");         // Disable LATM
+            recorder.setAudioOption("aac_mux_latm", "0");     // Disable LATM muxing
 
             recorder.start();
 

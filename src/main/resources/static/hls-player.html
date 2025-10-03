@@ -295,14 +295,24 @@
                     debug: false,
                     enableWorker: true,
                     lowLatencyMode: true,
-                    backBufferLength: 90,
-                    maxBufferLength: 30,
-                    maxMaxBufferLength: 60,
-                    liveSyncDurationCount: 3,
-                    liveMaxLatencyDurationCount: 5,
-                    maxLiveSyncPlaybackRate: 1.2,
+                    backBufferLength: 10,                    // Reduced back buffer (10 seconds)
+                    maxBufferLength: 6,                      // Reduced max buffer (6 seconds)
+                    maxMaxBufferLength: 10,                  // Reduced max max buffer (10 seconds)
+                    maxLiveSyncPlaybackRate: 1.5,            // Faster sync rate
                     liveDurationInfinity: true,
-                    highBufferWatchdogPeriod: 2
+                    highBufferWatchdogPeriod: 1,             // Faster buffer monitoring
+                    maxBufferHole: 0.1,                      // Smaller buffer holes
+                    maxBufferSize: 60 * 1000 * 1000,        // 60MB max buffer
+                    maxBufferStarvationDelay: 0.5,           // Faster starvation detection
+                    liveBackBufferLength: 0,                 // No live back buffer
+                    liveMaxLatencyDuration: 4,               // 4 seconds max latency
+                    liveSyncDuration: 2,                     // 2 seconds sync duration
+                    manifestLoadingTimeOut: 10000,           // 10 second manifest timeout
+                    manifestLoadingMaxRetry: 1,              // Single retry for manifest
+                    levelLoadingTimeOut: 10000,              // 10 second level timeout
+                    levelLoadingMaxRetry: 1,                 // Single retry for levels
+                    fragLoadingTimeOut: 20000,               // 20 second fragment timeout
+                    fragLoadingMaxRetry: 1                   // Single retry for fragments
                 });
                 
                 hls.loadSource(url);

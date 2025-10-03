@@ -40,7 +40,7 @@ public class HLSStreamService {
                     grabber.getImageHeight(),
                     grabber.getAudioChannels());
 
-            // Updated HLS and encoding settings
+            // Optimized HLS and encoding settings for faster buffering
             recorder.setFormat("hls");
             recorder.setVideoCodec(avcodec.AV_CODEC_ID_H264);
             
@@ -54,12 +54,29 @@ public class HLSStreamService {
                 logger.info("No audio channels detected, skipping audio configuration");
             }
             
-            recorder.setOption("hls_time", "4");
-            recorder.setOption("hls_list_size", "5");
-            recorder.setOption("hls_flags", "delete_segments+append_list");
-            recorder.setOption("preset", "ultrafast");
-            recorder.setOption("tune", "zerolatency");
+            // Optimized HLS settings for low latency and fast buffering
+            recorder.setOption("hls_time", "2");                    // Shorter segments (2 seconds)
+            recorder.setOption("hls_list_size", "3");               // Smaller playlist (3 segments)
+            recorder.setOption("hls_flags", "delete_segments+append_list+independent_segments");
+            recorder.setOption("hls_segment_type", "mpegts");       // Use MPEG-TS for better compatibility
+            recorder.setOption("hls_allow_cache", "0");             // Disable caching for live streams
+            
+            // Video encoding optimizations for speed
+            recorder.setOption("preset", "ultrafast");              // Fastest encoding preset
+            recorder.setOption("tune", "zerolatency");              // Zero latency tuning
+            // Note: Removed profile setting as it's not compatible with OpenH264
+            recorder.setOption("crf", "23");                        // Constant rate factor for quality
+            recorder.setOption("maxrate", "2M");                    // Maximum bitrate
+            recorder.setOption("bufsize", "4M");                    // Buffer size
+            
+            // Frame rate and GOP settings
             recorder.setFrameRate(30);
+            recorder.setGopSize(60);                                // 2-second GOP (30fps * 2s)
+            
+            // Additional low-latency options
+            recorder.setOption("fflags", "+genpts+igndts");         // Generate PTS, ignore DTS
+            recorder.setOption("avoid_negative_ts", "make_zero");   // Avoid negative timestamps
+            recorder.setOption("fps_mode", "cfr");                  // Constant frame rate
             recorder.start();
             logger.info("HLS recorder started successfully");
 

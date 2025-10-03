@@ -178,13 +178,16 @@ curl -X POST "http://localhost:8080/api/stream/hls/stop?streamName=myStream"
 - **Location**: `C:\tmp\videoplayback.mp4` (Windows) or `/tmp/videoplayback.mp4` (Linux/macOS)
 - **Size**: No specific limit, but larger files may take longer to process
 
-### **Stream Settings**
-- **HLS Segment Duration**: 4 seconds
-- **HLS Playlist Size**: 5 segments
-- **Video Codec**: H.264
+### **Stream Settings (Optimized for Fast Buffering)**
+- **HLS Segment Duration**: 2 seconds (reduced from 4s)
+- **HLS Playlist Size**: 3 segments (reduced from 5s)
+- **Video Codec**: H.264 (default profile for compatibility)
 - **Audio Codec**: AAC (if audio present)
 - **Frame Rate**: 30 FPS
 - **Preset**: ultrafast (for low latency)
+- **GOP Size**: 2 seconds (60 frames)
+- **Max Latency**: 4 seconds
+- **Buffer Size**: 6 seconds (reduced from 30s)
 
 ### **Docker Configuration**
 - **Memory Limit**: 4GB
@@ -301,9 +304,11 @@ The HLS player includes advanced continuous streaming capabilities:
 
 - **🔄 Automatic Reconnection**: Handles network interruptions
 - **📊 Health Monitoring**: Checks stream status every 5 seconds
-- **⚡ Low Latency**: Optimized for live streaming
+- **⚡ Ultra-Low Latency**: Optimized for live streaming (2-4 second latency)
 - **🛡️ Error Recovery**: Multiple recovery strategies
 - **📱 Cross-Platform**: Works on all modern browsers
+- **🚀 Fast Buffering**: Optimized buffer settings for quick startup
+- **📺 Live Sync**: Automatic synchronization to latest segments
 
 ## 🎯 API Endpoints
 
