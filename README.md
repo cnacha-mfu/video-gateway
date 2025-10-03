@@ -143,6 +143,7 @@ curl -X POST "http://localhost:8080/api/stream/hls/start?streamName=myStream&rts
 curl -X POST "http://localhost:8080/api/stream/hls/start" \
   -H "Content-Type: application/json" \
   -d '{
+    "streamName": "myStream",
     "rtspUrl": "rtsp://localhost:8554/myStream"
   }'
 ```
